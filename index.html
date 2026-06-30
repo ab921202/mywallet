@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MyWallet">
+  <meta name="description" content="個人資產管理 — 完全離線、永久保存">
+  <title>MyWallet — 個人資產管理</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div id="app">
+  <div class="pages">
+
+    <!-- 總覽 -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header safe-top">
+        <div class="header-row">
+          <h1>總覽</h1>
+          <span id="today-date" style="font-size:13px;color:var(--text3)"></span>
+        </div>
+      </div>
+      <div class="page-content">
+        <div class="hero-card">
+          <div class="hero-label">💼 總資產（台幣）</div>
+          <div class="hero-value" id="hero-value">NT$0</div>
+          <div class="hero-pnl" id="hero-pnl"></div>
+        </div>
+        <div class="today-card" id="today-card"></div>
+        <div class="card">
+          <div class="card-title">📊 資產配置</div>
+          <div style="display:flex;align-items:center;gap:16px">
+            <div style="flex:0 0 160px"><canvas id="alloc-chart" height="160"></canvas></div>
+            <div id="alloc-legend" class="legend" style="flex:1"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🏆 表現排行</div>
+          <div id="top-performers"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📋 最近交易</div>
+          <div id="recent-txs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 持倉 -->
+    <div class="page" id="page-portfolio">
+      <div class="page-header safe-top">
+        <div class="header-row">
+          <h1>持倉</h1>
+          <select style="font-size:12px;color:var(--text3);background:var(--surface2);border:none;border-radius:8px;padding:4px 8px;font-family:inherit" onchange="window.setSortOption(this.value)">
+            <option value="value">市值排序</option>
+            <option value="pnl">損益率排序</option>
+            <option value="name">名稱排序</option>
+            <option value="recent">最近更新</option>
+          </select>
+        </div>
+        <div class="search-bar" style="margin-top:10px">
+          <span>🔍</span>
+          <input type="text" placeholder="搜尋資產名稱或代碼" oninput="window.searchAssets(this.value)">
+        </div>
+      </div>
+      <div class="group-tabs" id="group-tabs"></div>
+      <div id="portfolio-summary"></div>
+      <div style="padding:0 16px 16px"><div id="asset-list"></div></div>
+    </div>
+
+    <!-- 圖表 -->
+    <div class="page" id="page-charts">
+      <div class="page-header safe-top"><h1>圖表</h1></div>
+      <div class="page-content">
+        <div class="seg-ctrl" id="charts-tabs"></div>
+        <div id="charts-content"></div>
+      </div>
+    </div>
+
+    <!-- 設定 -->
+    <div class="page" id="page-settings">
+      <div class="page-header safe-top"><h1>設定</h1></div>
+      <div class="page-content"><div id="settings-content"></div></div>
+    </div>
+
+    <!-- 資產詳情（動態渲染） -->
+    <div class="page" id="page-detail"></div>
+
+  </div>
+
+  <!-- Tab Bar -->
+  <nav class="tab-bar">
+    <div class="tab-item active" data-page="dashboard"><span class="tab-icon">🏠</span><span class="tab-label">總覽</span></div>
+    <div class="tab-item" data-page="portfolio"><span class="tab-icon">💼</span><span class="tab-label">持倉</span></div>
+    <div class="tab-add" onclick="window.openAddTxSheet()"><div class="tab-add-btn"><span>+</span></div></div>
+    <div class="tab-item" data-page="charts"><span class="tab-icon">📊</span><span class="tab-label">圖表</span></div>
+    <div class="tab-item" data-page="settings"><span class="tab-icon">⚙️</span><span class="tab-label">設定</span></div>
+  </nav>
+</div>
+
+<!-- Modal：新增交易 -->
+<div class="modal-overlay" id="modal-tx">
+  <div class="modal-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button class="cancel-btn" onclick="document.getElementById('modal-tx').classList.remove('open')">取消</button>
+      <span class="sheet-title">新增交易</span>
+      <div style="width:50px"></div>
+    </div>
+    <div class="sheet-body" id="tx-form-body"></div>
+  </div>
+</div>
+
+<!-- Modal：更新現價 -->
+<div class="modal-overlay center" id="modal-update-price">
+  <div class="modal-dialog">
+    <div style="font-size:17px;font-weight:700;margin-bottom:16px" id="update-price-title">更新現價</div>
+    <div class="form-group">
+      <div class="form-row"><span class="form-row-label">新價格</span><input type="number" id="update-price-input" placeholder="0.00"></div>
+      <div class="form-row" id="update-rate-row" style="display:none">
+        <span class="form-row-label" id="update-currency-label">匯率</span>
+        <input type="number" id="update-rate-input" placeholder="1">
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin:10px 0 16px;line-height:1.5">更新後將自動記錄走勢快照，並更新今日損益計算。</div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-update-price').classList.remove('open')">取消</button>
+      <button class="btn btn-primary" onclick="window.saveUpdatePrice()">確認更新</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal：編輯資產 -->
+<div class="modal-overlay" id="modal-edit-asset">
+  <div class="modal-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button class="cancel-btn" onclick="document.getElementById('modal-edit-asset').classList.remove('open')">取消</button>
+      <span class="sheet-title">編輯資產</span>
+      <button class="save-btn" onclick="window.saveEditAsset()">儲存</button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-section">
+        <label class="form-label">基本資料</label>
+        <div class="form-group">
+          <div class="form-row"><span class="form-row-label">名稱</span><input type="text" id="edit-asset-name" placeholder="資產名稱"></div>
+          <div class="form-row"><span class="form-row-label">代碼</span><input type="text" id="edit-asset-ticker" placeholder="選填"></div>
+          <div class="form-row"><span class="form-row-label">類別</span><select id="edit-asset-type"></select></div>
+          <div class="form-row"><span class="form-row-label">群組</span><select id="edit-asset-group"></select></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <label class="form-label">其他</label>
+        <div class="form-group">
+          <div class="form-row" style="flex-direction:column;align-items:stretch"><textarea id="edit-asset-note" placeholder="備註（選填）" style="text-align:left;min-height:60px;padding:8px 0"></textarea></div>
+          <div class="form-row"><span class="form-row-label">星號標記</span><label class="toggle"><input type="checkbox" id="edit-asset-fav"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal：新增群組 -->
+<div class="modal-overlay center" id="modal-add-group">
+  <div class="modal-dialog">
+    <div style="font-size:17px;font-weight:700;margin-bottom:16px">新增群組</div>
+    <div class="form-group">
+      <div class="form-row"><span class="form-row-label">名稱</span><input type="text" id="new-group-name" placeholder="e.g. 台股"></div>
+      <div class="form-row"><span class="form-row-label">圖示 (Emoji)</span><input type="text" id="new-group-icon" placeholder="📁" maxlength="4"></div>
+      <div class="form-row"><span class="form-row-label">顏色</span><input type="color" id="new-group-color" value="#007AFF" style="width:36px;height:28px;border:none;border-radius:6px;cursor:pointer;background:none"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-add-group').classList.remove('open')">取消</button>
+      <button class="btn btn-primary" onclick="window.saveAddGroup()">新增</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  document.getElementById('today-date').textContent =
+    new Date().toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'short' });
+</script>
+<script src="js/bundle.js"></script>
+</body>
+</html>
